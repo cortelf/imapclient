@@ -15,6 +15,7 @@ from collections import namedtuple
 from datetime import datetime, date
 from operator import itemgetter
 from logging import LoggerAdapter, getLogger
+from typing import Optional
 
 from six import moves, iteritems, text_type, integer_types, PY3, binary_type, iterbytes
 
@@ -22,6 +23,7 @@ from . import exceptions
 from . import imap4
 from . import response_lexer
 from . import tls
+from . import imap_ssl
 from .datetime_util import datetime_to_INTERNALDATE, format_criteria_date
 from .imap_utf7 import encode as encode_utf7, decode as decode_utf7
 from .response_parser import parse_response, parse_message_list, parse_fetch_response
@@ -246,6 +248,11 @@ class IMAPClient(object):
         stream=False,
         ssl_context=None,
         timeout=None,
+        proxy_type: Optional[int]=None,
+        proxy_host: Optional[str]=None,
+        proxy_port: Optional[int]=None,
+        proxy_login: Optional[str] = None,
+        proxy_password: Optional[str] = None,
     ):
         if stream:
             if port is not None:
@@ -270,6 +277,12 @@ class IMAPClient(object):
         self.use_uid = use_uid
         self.folder_encode = True
         self.normalise_times = True
+
+        self.proxy_host = proxy_host
+        self.proxy_type = proxy_type
+        self.proxy_port = proxy_port
+        self.proxy_login = proxy_login
+        self.proxy_password = proxy_password
 
         # If the user gives a single timeout value, assume it is the same for
         # connection and read/write operations
@@ -316,6 +329,21 @@ class IMAPClient(object):
             return imaplib.IMAP4_stream(self.host)
 
         connect_timeout = getattr(self._timeout, "connect", None)
+
+        has_proxy = self.proxy_host is not None and self.proxy_port is not None and self.proxy_type is not None
+
+        if self.ssl and has_proxy:
+            return imap_ssl.SocksIMAP4SSL(
+                imap_url=self.host,
+                imap_port=self.port,
+                proxy_type=self.proxy_type,
+                proxy_host=self.proxy_host,
+                proxy_port=self.proxy_port,
+                proxy_login=self.proxy_login,
+                proxy_password=self.proxy_password
+            )
+        if not self.ssl and has_proxy:
+            raise NotImplementedError()
 
         if self.ssl:
             return tls.IMAP4_TLS(

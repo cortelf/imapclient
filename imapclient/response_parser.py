@@ -24,6 +24,8 @@ from .response_lexer import TokenSource
 from .response_types import BodyData, Envelope, Address, SearchIds
 from .exceptions import ProtocolError
 
+from base64 import b64decode
+
 xrange = six.moves.xrange
 
 __all__ = ["parse_response", "parse_message_list"]
@@ -183,6 +185,21 @@ def _convert_ENVELOPE(envelope_response, normalise_times=True):
             pass
 
     subject = envelope_response[1]
+
+    if isinstance(subject, bytes):
+        subject = subject.decode()
+
+    if isinstance(subject, str):
+        if subject.startswith("=?utf-8?"):
+            subject = subject[8:]
+
+            if subject[1] == "?":
+                subject = subject[2:]
+            
+            if subject.endswith("?="):
+                subject = subject[:-2]
+
+            subject = b64decode(subject).decode()
 
     # addresses contains a tuple of addresses
     # from, sender, reply_to, to, cc, bcc headers
